@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include <stdio.h>
 #include <string.h>
 
 static Window *s_window;
@@ -8,6 +9,8 @@ static int s_step_count;
 
 static TextLayer *s_time_layer;
 static TextLayer *s_date_layer;
+static TextLayer *s_steps_text_layer;
+static TextLayer *s_battery_text_layer;
 
 static Layer *s_battery_layer;
 static Layer *s_steps_layer;
@@ -44,6 +47,12 @@ static void update_battery(Layer *layer, GContext *context) {
 
   graphics_context_set_fill_color(context, GColorWhite);
   graphics_fill_rect(context, GRect(2,bounds.size.h - bar_height - 2, bounds.size.w - 4, bar_height), 2, GCornerNone);
+
+  static char battery_buffer[5];
+
+  snprintf(battery_buffer, sizeof(battery_buffer), "%d%%", s_battery_level);
+
+  text_layer_set_text(s_battery_text_layer, battery_buffer);
 }
 
 static void update_steps(HealthEventType event, void *context){
@@ -54,9 +63,12 @@ static void update_steps(HealthEventType event, void *context){
 
   if (mask) {
     s_step_count = (int) health_service_sum_today(HealthMetricStepCount);
+    static char s_steps_buffer[8];
+    snprintf(s_steps_buffer, sizeof(s_steps_buffer), "%d", s_step_count);
+    text_layer_set_text(s_steps_text_layer, s_steps_buffer);
+    layer_mark_dirty(s_steps_layer);
   }
 
-  layer_mark_dirty(s_steps_layer);
 }
 
 static void update_steps_layer(Layer *layer, GContext *context) {
@@ -90,6 +102,18 @@ static void window_load(Window *window) {
   text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
 
+  s_steps_text_layer = text_layer_create(GRect(30,bounds.size.h-30, bounds.size.w, 50));
+  text_layer_set_background_color(s_steps_text_layer, GColorClear);
+  text_layer_set_text_color(s_steps_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
+  text_layer_set_font(s_steps_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_text_alignment(s_steps_text_layer, GTextAlignmentLeft);
+
+  s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 20, 20));
+  text_layer_set_background_color(s_battery_text_layer, GColorClear);
+  text_layer_set_text_color(s_battery_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
+  text_layer_set_font(s_battery_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_text_alignment(s_battery_text_layer, GTextAlignmentRight);
+
 
   int bar_x = bounds.size.w - 20;//(bounds.size.w - 10) / 2;
   int bar_y = 10;
@@ -104,6 +128,8 @@ static void window_load(Window *window) {
 
   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
   layer_add_child(window_layer, text_layer_get_layer(s_date_layer));
+  layer_add_child(window_layer, text_layer_get_layer(s_steps_text_layer));
+  layer_add_child(window_layer, text_layer_get_layer(s_battery_text_layer));
   layer_add_child(window_layer, s_battery_layer);
   layer_add_child(window_layer, s_steps_layer);
 }
@@ -117,7 +143,6 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
 }
 
 static void init(void) {
-  APP_LOG(APP_LOG_LEVEL_INFO, "Begin init");
   s_window = window_create();
 
   window_set_background_color(s_window, PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite));
@@ -141,7 +166,6 @@ static void init(void) {
   HealthServiceAccessibilityMask result = health_service_metric_accessible(HealthMetricStepCount, start, end);
   if (result && HealthServiceAccessibilityMaskAvailable) {
     s_step_count = (int) health_service_sum_today(HealthMetricStepCount);
-    APP_LOG(APP_LOG_LEVEL_ERROR,  "Steps %d", s_step_count);
   }
 
 }
