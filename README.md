@@ -2,6 +2,15 @@
 
 A Pebble watchface that shows battery level and steps progress 
 
+# Screenshots
+
+<img width="200" alt="phoenix-watch-live" src="https://github.com/user-attachments/assets/ef994a25-8bfd-436f-83a0-b677b6bf347b" />  
+
+<br/> <br />
+
+<img width="200" height="260" alt="phoenix-demo" src="https://github.com/user-attachments/assets/c399529d-fef4-4935-b66d-fa15efe2b3b6" />
+
+
 ## Building & running
 
 ```sh
