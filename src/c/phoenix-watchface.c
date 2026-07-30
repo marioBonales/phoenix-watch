@@ -90,39 +90,39 @@ static void window_load(Window *window) {
 
   int time_y = bounds.size.h / 2;
 
-  s_time_layer = text_layer_create(GRect(0,time_y - 30,bounds.size.w, 50));
+  s_time_layer = text_layer_create(GRect(0,time_y - 42,bounds.size.w, 50));
   text_layer_set_background_color(s_time_layer, GColorClear);
   text_layer_set_text_color(s_time_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
 
   s_date_layer = text_layer_create(GRect(0,time_y, bounds.size.w, 50));
   text_layer_set_background_color(s_date_layer, GColorClear);
   text_layer_set_text_color(s_date_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
 
-  s_steps_text_layer = text_layer_create(GRect(30,bounds.size.h-30, bounds.size.w, 50));
+  s_steps_text_layer = text_layer_create(GRect(20,bounds.size.h-30, bounds.size.w, 50));
   text_layer_set_background_color(s_steps_text_layer, GColorClear);
   text_layer_set_text_color(s_steps_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
   text_layer_set_font(s_steps_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(s_steps_text_layer, GTextAlignmentLeft);
 
-  s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 20, 20));
+  s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 18, 20));
   text_layer_set_background_color(s_battery_text_layer, GColorClear);
   text_layer_set_text_color(s_battery_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
   text_layer_set_font(s_battery_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(s_battery_text_layer, GTextAlignmentRight);
 
 
-  int bar_x = bounds.size.w - 20;//(bounds.size.w - 10) / 2;
+  int bar_x = bounds.size.w - 15;//(bounds.size.w - 10) / 2;
   int bar_y = 10;
   int bar_height = bounds.size.h - 20;
   s_battery_layer = layer_create(GRect(bar_x, bar_y, 8, bar_height));
   layer_set_update_proc(s_battery_layer, update_battery);
 
 
-  int steps_x = 20;
+  int steps_x = 10;
   s_steps_layer = layer_create(GRect(steps_x, bar_y, 8, bar_height));
   layer_set_update_proc(s_steps_layer, update_steps_layer);
 
