@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -6,11 +7,13 @@ static Window *s_window;
 
 static int s_battery_level;
 static int s_step_count;
+static int steps_objective = 10000;
 
 static TextLayer *s_time_layer;
 static TextLayer *s_date_layer;
 static TextLayer *s_steps_text_layer;
 static TextLayer *s_battery_text_layer;
+static TextLayer *s_multiplier_text_layer;
 
 static Layer *s_battery_layer;
 static Layer *s_steps_layer;
@@ -61,12 +64,25 @@ static void update_steps(HealthEventType event, void *context){
   
   HealthServiceAccessibilityMask mask = health_service_metric_accessible(HealthMetricStepCount, start, end);
 
-  if (mask) {
-    s_step_count = (int) health_service_sum_today(HealthMetricStepCount);
-    static char s_steps_buffer[8];
-    snprintf(s_steps_buffer, sizeof(s_steps_buffer), "%d", s_step_count);
-    text_layer_set_text(s_steps_text_layer, s_steps_buffer);
-    layer_mark_dirty(s_steps_layer);
+  if (!mask) {
+    return;
+  }
+
+  s_step_count = (int) health_service_sum_today(HealthMetricStepCount);
+  static char s_steps_buffer[8];
+  snprintf(s_steps_buffer, sizeof(s_steps_buffer), "%d", s_step_count);
+  text_layer_set_text(s_steps_text_layer, s_steps_buffer);
+  layer_mark_dirty(s_steps_layer);
+
+  if(s_step_count >= steps_objective * 10) {
+    text_layer_set_text(s_multiplier_text_layer, "9+");
+  }
+  else if (s_step_count > steps_objective) {
+    static char s_multiplier_buffer[3];
+    snprintf(s_multiplier_buffer, sizeof(s_multiplier_buffer), "x%d", s_step_count / steps_objective);
+    text_layer_set_text(s_multiplier_text_layer, s_multiplier_buffer);
+  } else {
+    text_layer_set_text(s_multiplier_text_layer, "");
   }
 
 }
@@ -74,13 +90,22 @@ static void update_steps(HealthEventType event, void *context){
 static void update_steps_layer(Layer *layer, GContext *context) {
   GRect bounds =  layer_get_bounds(layer);
 
-  int bar_height = s_step_count >= 10000 ? bounds.size.h-4 : ((s_step_count / 100) * (bounds.size.h - 4)/100);
+  bool overcharged = s_step_count >= steps_objective;
+
 
   graphics_context_set_stroke_color(context, GColorBlack);
+
   graphics_draw_round_rect(context, bounds, 4);
 
-  graphics_context_set_fill_color(context, GColorWhite);
-  graphics_fill_rect(context, GRect(2,bounds.size.h - bar_height - 2, bounds.size.w - 4, bar_height), 2, GCornerNone);
+  if (overcharged) {
+    graphics_context_set_fill_color(context, GColorWhite);
+    graphics_fill_rect(context, GRect(2,2, bounds.size.w - 4, bounds.size.h -4), 2, GCornerNone);
+  }
+
+  int bar_height = ((s_step_count % steps_objective / 100) * (bounds.size.h - 4)/100);
+
+  graphics_context_set_fill_color(context, overcharged? GColorGreen : GColorWhite);
+  graphics_fill_rect(context, GRect(2,bounds.size.h - bar_height - 3, bounds.size.w - 4, bar_height), 2, GCornerNone);
 
 }
 
@@ -108,6 +133,12 @@ static void window_load(Window *window) {
   text_layer_set_font(s_steps_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(s_steps_text_layer, GTextAlignmentLeft);
 
+  s_multiplier_text_layer = text_layer_create(GRect(20,10, bounds.size.w, 50));
+  text_layer_set_background_color(s_multiplier_text_layer, GColorClear);
+  text_layer_set_text_color(s_multiplier_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
+  text_layer_set_font(s_multiplier_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_text_alignment(s_multiplier_text_layer, GTextAlignmentLeft);
+
   s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 18, 20));
   text_layer_set_background_color(s_battery_text_layer, GColorClear);
   text_layer_set_text_color(s_battery_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
@@ -115,7 +146,7 @@ static void window_load(Window *window) {
   text_layer_set_text_alignment(s_battery_text_layer, GTextAlignmentRight);
 
 
-  int bar_x = bounds.size.w - 15;//(bounds.size.w - 10) / 2;
+  int bar_x = bounds.size.w - 15;
   int bar_y = 10;
   int bar_height = bounds.size.h - 20;
   s_battery_layer = layer_create(GRect(bar_x, bar_y, 8, bar_height));
@@ -129,6 +160,7 @@ static void window_load(Window *window) {
   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
   layer_add_child(window_layer, text_layer_get_layer(s_date_layer));
   layer_add_child(window_layer, text_layer_get_layer(s_steps_text_layer));
+  layer_add_child(window_layer, text_layer_get_layer(s_multiplier_text_layer));
   layer_add_child(window_layer, text_layer_get_layer(s_battery_text_layer));
   layer_add_child(window_layer, s_battery_layer);
   layer_add_child(window_layer, s_steps_layer);
