@@ -2,9 +2,13 @@
   "name": "phoenix-watch",
   "author": "Mario Bonales",
   "version": "0.0.1",
-  "keywords": ["pebble-app"],
+  "keywords": [
+    "pebble-app"
+  ],
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@rebble/clay": "^1.0.10"
+  },
   "pebble": {
     "displayName": "phoenix-watch",
     "uuid": "b9080949-7221-4ac4-8914-2b5396cd72dc",
@@ -20,13 +24,15 @@
       "gabbro"
     ],
     "capabilities": [
-      "health"
+      "health",
+      "configurable"
     ],
     "watchapp": {
       "watchface": true
     },
     "messageKeys": [
-      "dummy"
+      "StepsObjective",
+      "NightModeEnabled"
     ],
     "resources": {
       "media": []

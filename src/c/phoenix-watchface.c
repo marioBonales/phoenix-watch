@@ -1,13 +1,22 @@
+#include <inttypes.h>
 #include <pebble.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
+#define SETTINGS_KEY 1
+
+typedef struct ClaySettings {
+  bool NightModeEnabled;
+  int StepsObjective;
+} ClaySettings;
+
+static ClaySettings settings;
+
 static Window *s_window;
 
 static int s_battery_level;
 static int s_step_count;
-static int steps_objective = 10000;
 
 static TextLayer *s_time_layer;
 static TextLayer *s_date_layer;
@@ -18,6 +27,19 @@ static TextLayer *s_multiplier_text_layer;
 static Layer *s_battery_layer;
 static Layer *s_steps_layer;
 
+static void prv_default_settings() {
+  settings.NightModeEnabled = true;
+  settings.StepsObjective = 10000;
+}
+
+static void prv_save_settings() {
+  persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
+}
+
+static void prv_load_settings() {
+  prv_default_settings();
+  persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+}
 
 static void update_time() {
   time_t temp = time(NULL);
@@ -58,7 +80,8 @@ static void update_battery(Layer *layer, GContext *context) {
   text_layer_set_text(s_battery_text_layer, battery_buffer);
 }
 
-static void update_steps(HealthEventType event, void *context){
+
+static void update_steps(){
   time_t start = time_start_of_today();
   time_t end = time(NULL);
   
@@ -74,12 +97,12 @@ static void update_steps(HealthEventType event, void *context){
   text_layer_set_text(s_steps_text_layer, s_steps_buffer);
   layer_mark_dirty(s_steps_layer);
 
-  if(s_step_count >= steps_objective * 10) {
+  if(s_step_count >= settings.StepsObjective * 10) {
     text_layer_set_text(s_multiplier_text_layer, "9+");
   }
-  else if (s_step_count > steps_objective) {
+  else if (s_step_count > settings.StepsObjective) {
     static char s_multiplier_buffer[3];
-    snprintf(s_multiplier_buffer, sizeof(s_multiplier_buffer), "x%d", s_step_count / steps_objective);
+    snprintf(s_multiplier_buffer, sizeof(s_multiplier_buffer), "x%d", s_step_count / settings.StepsObjective);
     text_layer_set_text(s_multiplier_text_layer, s_multiplier_buffer);
   } else {
     text_layer_set_text(s_multiplier_text_layer, "");
@@ -87,10 +110,14 @@ static void update_steps(HealthEventType event, void *context){
 
 }
 
+static void update_health_service(HealthEventType event, void *context){
+  update_steps();
+}
+
 static void update_steps_layer(Layer *layer, GContext *context) {
   GRect bounds =  layer_get_bounds(layer);
 
-  bool overcharged = s_step_count >= steps_objective;
+  bool overcharged = s_step_count >= settings.StepsObjective;
 
 
   graphics_context_set_stroke_color(context, GColorBlack);
@@ -102,7 +129,8 @@ static void update_steps_layer(Layer *layer, GContext *context) {
     graphics_fill_rect(context, GRect(2,2, bounds.size.w - 4, bounds.size.h -4), 2, GCornerNone);
   }
 
-  int bar_height = ((s_step_count % steps_objective / 100) * (bounds.size.h - 4)/100);
+  long percentage = (s_step_count % settings.StepsObjective)* 100 / settings.StepsObjective;
+  int bar_height = percentage * (bounds.size.h - 4) / 100;
 
   graphics_context_set_fill_color(context, overcharged? GColorGreen : GColorWhite);
   graphics_fill_rect(context, GRect(2,bounds.size.h - bar_height - 3, bounds.size.w - 4, bar_height), 2, GCornerNone);
@@ -174,7 +202,29 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
   update_time();
 }
 
+static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "Settings Updated");
+  Tuple *steps_objective = dict_find(iterator, MESSAGE_KEY_StepsObjective);
+  if(steps_objective) {
+    settings.StepsObjective = atoi(steps_objective->value->cstring);
+    APP_LOG(APP_LOG_LEVEL_INFO, "Steps %d", settings.StepsObjective);
+    update_steps();
+  }
+}
+
+static void inbox_dropped_callback(AppMessageResult reason, void *context) {
+  APP_LOG(APP_LOG_LEVEL_ERROR, "Message Dropped");
+}
+
+static void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResult reason, void *context) {
+  APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send fail");
+}
+static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "Outbox message sent");
+}
+
 static void init(void) {
+  prv_load_settings();
   s_window = window_create();
 
   window_set_background_color(s_window, PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite));
@@ -190,7 +240,7 @@ static void init(void) {
   battery_state_service_subscribe(update_battery_state);
   update_battery_state(battery_state_service_peek());
 
-  health_service_events_subscribe(update_steps, NULL);
+  health_service_events_subscribe(update_health_service, NULL);
 
   time_t start = time_start_of_today();
   time_t end = time(NULL);
@@ -199,6 +249,13 @@ static void init(void) {
   if (result && HealthServiceAccessibilityMaskAvailable) {
     s_step_count = (int) health_service_sum_today(HealthMetricStepCount);
   }
+
+  app_message_register_inbox_received(inbox_received_callback);
+  app_message_register_inbox_dropped(inbox_dropped_callback);
+  app_message_register_outbox_failed(outbox_failed_callback);
+  app_message_register_outbox_sent(outbox_sent_callback);
+
+  app_message_open(256,256);
 
 }
 
@@ -212,3 +269,4 @@ int main(void) {
   app_event_loop();
   deinit();
 }
+
