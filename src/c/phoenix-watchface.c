@@ -18,8 +18,8 @@ static Window *s_window;
 static int s_battery_level;
 static int s_step_count;
 
-static TextLayer *s_time_layer;
-static TextLayer *s_date_layer;
+static TextLayer *s_time_text_layer;
+static TextLayer *s_date_text_layer;
 static TextLayer *s_steps_text_layer;
 static TextLayer *s_battery_text_layer;
 static TextLayer *s_multiplier_text_layer;
@@ -48,11 +48,11 @@ static void update_time() {
   static char s_time_buffer[8]; 
 
   strftime(s_time_buffer,sizeof(s_time_buffer), clock_is_24h_style()? "%H:%M": "%I:%M", tick_time);
-  text_layer_set_text(s_time_layer, s_time_buffer);
+  text_layer_set_text(s_time_text_layer, s_time_buffer);
 
   static char s_date_buffer[16];
   strftime(s_date_buffer, sizeof(s_date_buffer), "%a %m/%d", tick_time);
-  text_layer_set_text(s_date_layer, s_date_buffer);
+  text_layer_set_text(s_date_text_layer, s_date_buffer);
 }
 
 static void update_battery_state(BatteryChargeState state) {
@@ -137,42 +137,34 @@ static void update_steps_layer(Layer *layer, GContext *context) {
 
 }
 
+static void initialize_text_layer(TextLayer *textLayer, Layer *rootLayer, GFont font, GTextAlignment alignment) {
+  text_layer_set_background_color(textLayer, GColorClear);
+  text_layer_set_text_color(textLayer, GColorBlack);
+  text_layer_set_font(textLayer, font);
+  text_layer_set_text_alignment(textLayer, alignment);
+  layer_add_child(rootLayer, text_layer_get_layer(textLayer));
+}
+
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
   int time_y = bounds.size.h / 2;
 
-  s_time_layer = text_layer_create(GRect(0,time_y - 42,bounds.size.w, 50));
-  text_layer_set_background_color(s_time_layer, GColorClear);
-  text_layer_set_text_color(s_time_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
-  text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
+  s_time_text_layer = text_layer_create(GRect(0,time_y - 42,bounds.size.w, 50));
+  initialize_text_layer(s_time_text_layer, window_layer, fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD), GTextAlignmentCenter);
 
-  s_date_layer = text_layer_create(GRect(0,time_y, bounds.size.w, 50));
-  text_layer_set_background_color(s_date_layer, GColorClear);
-  text_layer_set_text_color(s_date_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
-  text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
+  s_date_text_layer = text_layer_create(GRect(0,time_y, bounds.size.w, 50));
+  initialize_text_layer(s_date_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD), GTextAlignmentCenter);
 
   s_steps_text_layer = text_layer_create(GRect(20,bounds.size.h-30, bounds.size.w, 50));
-  text_layer_set_background_color(s_steps_text_layer, GColorClear);
-  text_layer_set_text_color(s_steps_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_steps_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_steps_text_layer, GTextAlignmentLeft);
+  initialize_text_layer(s_steps_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentLeft);
 
   s_multiplier_text_layer = text_layer_create(GRect(20,10, bounds.size.w, 50));
-  text_layer_set_background_color(s_multiplier_text_layer, GColorClear);
-  text_layer_set_text_color(s_multiplier_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_multiplier_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_multiplier_text_layer, GTextAlignmentLeft);
+  initialize_text_layer(s_multiplier_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentLeft);
 
   s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 18, 20));
-  text_layer_set_background_color(s_battery_text_layer, GColorClear);
-  text_layer_set_text_color(s_battery_text_layer, PBL_IF_COLOR_ELSE(GColorBlack, GColorBlack));
-  text_layer_set_font(s_battery_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_battery_text_layer, GTextAlignmentRight);
-
+  initialize_text_layer(s_battery_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentRight);
 
   int bar_x = bounds.size.w - 15;
   int bar_y = 10;
@@ -185,17 +177,12 @@ static void window_load(Window *window) {
   s_steps_layer = layer_create(GRect(steps_x, bar_y, 8, bar_height));
   layer_set_update_proc(s_steps_layer, update_steps_layer);
 
-  layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
-  layer_add_child(window_layer, text_layer_get_layer(s_date_layer));
-  layer_add_child(window_layer, text_layer_get_layer(s_steps_text_layer));
-  layer_add_child(window_layer, text_layer_get_layer(s_multiplier_text_layer));
-  layer_add_child(window_layer, text_layer_get_layer(s_battery_text_layer));
   layer_add_child(window_layer, s_battery_layer);
   layer_add_child(window_layer, s_steps_layer);
 }
 
 static void window_unload(Window *window) {
-  text_layer_destroy(s_time_layer);
+  text_layer_destroy(s_time_text_layer);
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
