@@ -35,7 +35,18 @@
       "NightModeEnabled"
     ],
     "resources": {
-      "media": []
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "BATTERY",
+          "file": "img/battery.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "STEPS",
+          "file": "img/steps.png"
+        }
+      ]
     }
   }
 }

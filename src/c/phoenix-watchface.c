@@ -1,3 +1,4 @@
+#include "src/resource_ids.auto.h"
 #include <inttypes.h>
 #include <pebble.h>
 #include <stdbool.h>
@@ -24,8 +25,14 @@ static TextLayer *s_steps_text_layer;
 static TextLayer *s_battery_text_layer;
 static TextLayer *s_multiplier_text_layer;
 
-static Layer *s_battery_layer;
-static Layer *s_steps_layer;
+static Layer *s_battery_bar_layer;
+static Layer *s_steps_bar_layer;
+
+static GBitmap *s_bitmap_battery;
+static GBitmap *s_bitmap_steps;
+
+static BitmapLayer *s_bitmap_battery_layer;
+static BitmapLayer *s_bitmap_steps_layer;
 
 static void prv_default_settings() {
   settings.NightModeEnabled = true;
@@ -58,7 +65,7 @@ static void update_time() {
 static void update_battery_state(BatteryChargeState state) {
   s_battery_level = state.charge_percent;
 
-  layer_mark_dirty(s_battery_layer);
+  layer_mark_dirty(s_battery_bar_layer);
 }
 
 static void update_battery(Layer *layer, GContext *context) {
@@ -80,7 +87,6 @@ static void update_battery(Layer *layer, GContext *context) {
   text_layer_set_text(s_battery_text_layer, battery_buffer);
 }
 
-
 static void update_steps(){
   time_t start = time_start_of_today();
   time_t end = time(NULL);
@@ -95,7 +101,7 @@ static void update_steps(){
   static char s_steps_buffer[8];
   snprintf(s_steps_buffer, sizeof(s_steps_buffer), "%d", s_step_count);
   text_layer_set_text(s_steps_text_layer, s_steps_buffer);
-  layer_mark_dirty(s_steps_layer);
+  layer_mark_dirty(s_steps_bar_layer);
 
   if(s_step_count >= settings.StepsObjective * 10) {
     text_layer_set_text(s_multiplier_text_layer, "9+");
@@ -157,32 +163,55 @@ static void window_load(Window *window) {
   s_date_text_layer = text_layer_create(GRect(0,time_y, bounds.size.w, 50));
   initialize_text_layer(s_date_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD), GTextAlignmentCenter);
 
-  s_steps_text_layer = text_layer_create(GRect(20,bounds.size.h-30, bounds.size.w, 50));
+  s_steps_text_layer = text_layer_create(GRect(30,bounds.size.h-30, bounds.size.w, 50));
   initialize_text_layer(s_steps_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentLeft);
 
   s_multiplier_text_layer = text_layer_create(GRect(20,10, bounds.size.w, 50));
   initialize_text_layer(s_multiplier_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentLeft);
 
-  s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 18, 20));
+  s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 26, 20));
   initialize_text_layer(s_battery_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentRight);
 
   int bar_x = bounds.size.w - 15;
   int bar_y = 10;
   int bar_height = bounds.size.h - 20;
-  s_battery_layer = layer_create(GRect(bar_x, bar_y, 8, bar_height));
-  layer_set_update_proc(s_battery_layer, update_battery);
+  s_battery_bar_layer = layer_create(GRect(bar_x, bar_y, 8, bar_height));
+  layer_set_update_proc(s_battery_bar_layer, update_battery);
 
 
   int steps_x = 10;
-  s_steps_layer = layer_create(GRect(steps_x, bar_y, 8, bar_height));
-  layer_set_update_proc(s_steps_layer, update_steps_layer);
+  s_steps_bar_layer = layer_create(GRect(steps_x, bar_y, 8, bar_height));
+  layer_set_update_proc(s_steps_bar_layer, update_steps_layer);
 
-  layer_add_child(window_layer, s_battery_layer);
-  layer_add_child(window_layer, s_steps_layer);
+  layer_add_child(window_layer, s_battery_bar_layer);
+  layer_add_child(window_layer, s_steps_bar_layer);
+
+  s_bitmap_battery_layer = bitmap_layer_create(GRect(bounds.size.w - 27,bounds.size.h - 32,14,28));
+  bitmap_layer_set_compositing_mode(s_bitmap_battery_layer,GCompOpSet);
+  bitmap_layer_set_bitmap(s_bitmap_battery_layer, s_bitmap_battery);
+  layer_add_child(window_layer, bitmap_layer_get_layer(s_bitmap_battery_layer));
+
+  s_bitmap_steps_layer = bitmap_layer_create(GRect(20,bounds.size.h - 25,10,14));
+  bitmap_layer_set_compositing_mode(s_bitmap_steps_layer,GCompOpSet);
+  bitmap_layer_set_bitmap(s_bitmap_steps_layer, s_bitmap_steps);
+  layer_add_child(window_layer, bitmap_layer_get_layer(s_bitmap_steps_layer));
 }
 
 static void window_unload(Window *window) {
   text_layer_destroy(s_time_text_layer);
+  text_layer_destroy(s_date_text_layer);
+  text_layer_destroy(s_steps_text_layer);
+  text_layer_destroy(s_multiplier_text_layer);
+  text_layer_destroy(s_battery_text_layer);
+
+  layer_destroy(s_battery_bar_layer);
+  layer_destroy(s_steps_bar_layer);
+
+  gbitmap_destroy(s_bitmap_battery);
+  bitmap_layer_destroy(s_bitmap_battery_layer);
+
+  gbitmap_destroy(s_bitmap_steps);
+  bitmap_layer_destroy(s_bitmap_steps_layer);
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
@@ -194,7 +223,6 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   Tuple *steps_objective = dict_find(iterator, MESSAGE_KEY_StepsObjective);
   if(steps_objective) {
     settings.StepsObjective = atoi(steps_objective->value->cstring);
-    APP_LOG(APP_LOG_LEVEL_INFO, "Steps %d", settings.StepsObjective);
     update_steps();
   }
 }
@@ -219,6 +247,9 @@ static void init(void) {
     .load = window_load,
     .unload = window_unload,
   });
+
+  s_bitmap_battery = gbitmap_create_with_resource(RESOURCE_ID_BATTERY);
+  s_bitmap_steps = gbitmap_create_with_resource(RESOURCE_ID_STEPS);
 
   window_stack_push(s_window, true);
   update_time();
