@@ -232,9 +232,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
     app_message_outbox_send();
   }
 
-  if(tick_time->tm_hour < 4) {
-    night_mode = true;
-  }
+  night_mode = tick_time->tm_hour < 4;
 
 }
 
