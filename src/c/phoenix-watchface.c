@@ -24,6 +24,7 @@ static TextLayer *s_date_text_layer;
 static TextLayer *s_steps_text_layer;
 static TextLayer *s_battery_text_layer;
 static TextLayer *s_multiplier_text_layer;
+static TextLayer *s_weather_layer;
 
 static Layer *s_battery_bar_layer;
 static Layer *s_steps_bar_layer;
@@ -33,6 +34,8 @@ static GBitmap *s_bitmap_steps;
 
 static BitmapLayer *s_bitmap_battery_layer;
 static BitmapLayer *s_bitmap_steps_layer;
+
+static bool night_mode = false;
 
 static void prv_default_settings() {
   settings.NightModeEnabled = true;
@@ -55,7 +58,7 @@ static void update_time() {
   static char s_time_buffer[8]; 
 
   strftime(s_time_buffer,sizeof(s_time_buffer), clock_is_24h_style()? "%H:%M": "%I:%M", tick_time);
-  text_layer_set_text(s_time_text_layer, s_time_buffer);
+  text_layer_set_text(s_time_text_layer, night_mode? "sleep" : s_time_buffer);
 
   static char s_date_buffer[16];
   strftime(s_date_buffer, sizeof(s_date_buffer), "%a %m/%d", tick_time);
@@ -163,6 +166,10 @@ static void window_load(Window *window) {
   s_date_text_layer = text_layer_create(GRect(0,time_y, bounds.size.w, 50));
   initialize_text_layer(s_date_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD), GTextAlignmentCenter);
 
+  s_weather_layer = text_layer_create(GRect(0,time_y+24, bounds.size.w, 50));
+  initialize_text_layer(s_weather_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentCenter);
+  text_layer_set_text(s_weather_layer, "Loading");
+
   s_steps_text_layer = text_layer_create(GRect(30,bounds.size.h-30, bounds.size.w, 50));
   initialize_text_layer(s_steps_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentLeft);
 
@@ -171,6 +178,7 @@ static void window_load(Window *window) {
 
   s_battery_text_layer = text_layer_create(GRect(bounds.size.w/2,bounds.size.h-30, bounds.size.w/2 - 26, 20));
   initialize_text_layer(s_battery_text_layer, window_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), GTextAlignmentRight);
+
 
   int bar_x = bounds.size.w - 15;
   int bar_y = 10;
@@ -216,10 +224,40 @@ static void window_unload(Window *window) {
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed){
   update_time();
+  
+  if(tick_time->tm_min % 30 == 0) {
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    dict_write_uint8(iter, MESSAGE_KEY_RequestWeather, 1);
+    app_message_outbox_send();
+  }
+
+  if(tick_time->tm_hour < 4) {
+    night_mode = true;
+  }
+
 }
 
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
-  APP_LOG(APP_LOG_LEVEL_INFO, "Settings Updated");
+  //Update weather
+  Tuple *temp = dict_find(iterator, MESSAGE_KEY_Temp);
+  Tuple *conditions = dict_find(iterator, MESSAGE_KEY_Conditions);
+  Tuple *precipitation = dict_find(iterator, MESSAGE_KEY_Precipitation);
+
+  if (temp && conditions) {
+    static char temp_buffer[8];
+    static char conditions_buffer[32];
+    static char weather_layer_buffer[42];
+
+    snprintf(temp_buffer, sizeof(temp_buffer), "%d°C", (int)temp->value->int32);
+    snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions->value->cstring);
+    snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s %s (%d%%)", temp_buffer, conditions_buffer,(int)precipitation->value->int32);
+
+    text_layer_set_text(s_weather_layer, weather_layer_buffer);
+  }
+
+
+  //Update configurations
   Tuple *steps_objective = dict_find(iterator, MESSAGE_KEY_StepsObjective);
   if(steps_objective) {
     settings.StepsObjective = atoi(steps_objective->value->cstring);

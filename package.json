@@ -32,7 +32,11 @@
     },
     "messageKeys": [
       "StepsObjective",
-      "NightModeEnabled"
+      "NightModeEnabled",
+      "Temp",
+      "Conditions",
+      "RequestWeather",
+      "Precipitation"
     ],
     "resources": {
       "media": [
